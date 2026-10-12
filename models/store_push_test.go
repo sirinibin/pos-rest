@@ -24,15 +24,17 @@ func withStorePushRecorder(t *testing.T, delay time.Duration) (sent func(ids ...
 	var mu sync.Mutex
 	var got []primitive.ObjectID
 	oldSend, oldDelay := sendStoreUpdated, StorePushDelay
-	sendStoreUpdated = func(id primitive.ObjectID) {
-		mu.Lock()
-		got = append(got, id)
-		mu.Unlock()
-	}
-	StorePushDelay = delay
+	setPushHooks(func() {
+		sendStoreUpdated = func(id primitive.ObjectID) {
+			mu.Lock()
+			got = append(got, id)
+			mu.Unlock()
+		}
+		StorePushDelay = delay
+	})
 	t.Cleanup(func() {
 		time.Sleep(3 * delay) // let pending timers fire before restoring
-		sendStoreUpdated, StorePushDelay = oldSend, oldDelay
+		setPushHooks(func() { sendStoreUpdated, StorePushDelay = oldSend, oldDelay })
 	})
 	return func(ids ...primitive.ObjectID) []primitive.ObjectID {
 		mu.Lock()
@@ -102,9 +104,11 @@ func TestNotifyStoreUpdated_ZeroIDIgnored(t *testing.T) {
 func TestNotifyStoreUpdated_ReturnsImmediately(t *testing.T) {
 	var calls int32
 	oldSend, oldDelay := sendStoreUpdated, StorePushDelay
-	sendStoreUpdated = func(primitive.ObjectID) { atomic.AddInt32(&calls, 1) }
-	StorePushDelay = time.Hour
-	defer func() { sendStoreUpdated, StorePushDelay = oldSend, oldDelay }()
+	setPushHooks(func() {
+		sendStoreUpdated = func(primitive.ObjectID) { atomic.AddInt32(&calls, 1) }
+		StorePushDelay = time.Hour
+	})
+	defer setPushHooks(func() { sendStoreUpdated, StorePushDelay = oldSend, oldDelay })
 	start := time.Now()
 	NotifyStoreUpdated(primitive.NewObjectID())
 	if time.Since(start) > 50*time.Millisecond {
@@ -240,18 +244,20 @@ func TestNotifyProcurementMessagesChanged_BundledPerType(t *testing.T) {
 	got := map[string]int{}
 	id := primitive.NewObjectID()
 	oldSend, oldDelay := sendProcurementMessagesChanged, StorePushDelay
-	sendProcurementMessagesChanged = func(storeID primitive.ObjectID, msgType string) {
-		if storeID != id {
-			return // another test's background work
+	setPushHooks(func() {
+		sendProcurementMessagesChanged = func(storeID primitive.ObjectID, msgType string) {
+			if storeID != id {
+				return // another test's background work
+			}
+			mu.Lock()
+			got[msgType]++
+			mu.Unlock()
 		}
-		mu.Lock()
-		got[msgType]++
-		mu.Unlock()
-	}
-	StorePushDelay = 20 * time.Millisecond
+		StorePushDelay = 20 * time.Millisecond
+	})
 	defer func() {
 		time.Sleep(60 * time.Millisecond)
-		sendProcurementMessagesChanged, StorePushDelay = oldSend, oldDelay
+		setPushHooks(func() { sendProcurementMessagesChanged, StorePushDelay = oldSend, oldDelay })
 	}()
 	for i := 0; i < 50; i++ {
 		NotifyProcurementMessagesChanged(id, "email")
@@ -272,12 +278,14 @@ func TestCoalesce_TopicsDoNotSwallowEachOther(t *testing.T) {
 	var msgs int32
 	oldSend := sendProcurementMessagesChanged
 	id := primitive.NewObjectID()
-	sendProcurementMessagesChanged = func(storeID primitive.ObjectID, _ string) {
-		if storeID == id {
-			atomic.AddInt32(&msgs, 1)
+	setPushHooks(func() {
+		sendProcurementMessagesChanged = func(storeID primitive.ObjectID, _ string) {
+			if storeID == id {
+				atomic.AddInt32(&msgs, 1)
+			}
 		}
-	}
-	defer func() { sendProcurementMessagesChanged = oldSend }()
+	})
+	defer setPushHooks(func() { sendProcurementMessagesChanged = oldSend })
 	NotifyStoreUpdated(id)
 	NotifyProcurementMessagesChanged(id, "whatsapp")
 	time.Sleep(80 * time.Millisecond)
@@ -291,16 +299,18 @@ func TestPushJobProgress_LatestSnapshotToOwner(t *testing.T) {
 	var got []map[string]interface{}
 	var owners []string
 	oldSend, oldDelay := sendJobProgress, StorePushDelay
-	sendJobProgress = func(owner string, data map[string]interface{}) {
-		mu.Lock()
-		owners = append(owners, owner)
-		got = append(got, data)
-		mu.Unlock()
-	}
-	StorePushDelay = 20 * time.Millisecond
+	setPushHooks(func() {
+		sendJobProgress = func(owner string, data map[string]interface{}) {
+			mu.Lock()
+			owners = append(owners, owner)
+			got = append(got, data)
+			mu.Unlock()
+		}
+		StorePushDelay = 20 * time.Millisecond
+	})
 	defer func() {
 		time.Sleep(60 * time.Millisecond)
-		sendJobProgress, StorePushDelay = oldSend, oldDelay
+		setPushHooks(func() { sendJobProgress, StorePushDelay = oldSend, oldDelay })
 	}()
 	var step int32
 	snap := func() interface{} { return atomic.LoadInt32(&step) }
@@ -328,16 +338,19 @@ func TestNotifyFrontendDeployed_OncePerGap(t *testing.T) {
 	lastFrontendDeployed = time.Time{}
 	storePushMu.Unlock()
 	t.Cleanup(func() {
-		sendFrontendDeployed, FrontendDeployedMinGap = oldSend, oldGap
+		setPushHooks(func() { sendFrontendDeployed = oldSend })
 		storePushMu.Lock()
+		FrontendDeployedMinGap = oldGap
 		lastFrontendDeployed = oldLast
 		storePushMu.Unlock()
 	})
 
 	var mu sync.Mutex
 	sent := 0
-	sendFrontendDeployed = func() { mu.Lock(); sent++; mu.Unlock() }
+	setPushHooks(func() { sendFrontendDeployed = func() { mu.Lock(); sent++; mu.Unlock() } })
+	storePushMu.Lock()
 	FrontendDeployedMinGap = 100 * time.Millisecond
+	storePushMu.Unlock()
 
 	results := make(chan bool, 20)
 	var wg sync.WaitGroup
@@ -371,20 +384,22 @@ func TestNotifyFrontendDeployed_OncePerGap(t *testing.T) {
 
 func TestNotifyDashboardRecomputed_OncePerBurstPerStore(t *testing.T) {
 	oldSend, oldDelay := sendDashboardRecomputed, StorePushDelay
-	t.Cleanup(func() { sendDashboardRecomputed, StorePushDelay = oldSend, oldDelay })
-	StorePushDelay = 20 * time.Millisecond
+	t.Cleanup(func() { setPushHooks(func() { sendDashboardRecomputed, StorePushDelay = oldSend, oldDelay }) })
+	setPushHooks(func() { StorePushDelay = 20 * time.Millisecond })
 
 	var mu sync.Mutex
 	got := map[primitive.ObjectID]int{}
 	a, b := primitive.NewObjectID(), primitive.NewObjectID()
-	sendDashboardRecomputed = func(id primitive.ObjectID) {
-		if id != a && id != b && !id.IsZero() {
-			return // another test's background work
+	setPushHooks(func() {
+		sendDashboardRecomputed = func(id primitive.ObjectID) {
+			if id != a && id != b && !id.IsZero() {
+				return // another test's background work
+			}
+			mu.Lock()
+			got[id]++
+			mu.Unlock()
 		}
-		mu.Lock()
-		got[id]++
-		mu.Unlock()
-	}
+	})
 
 	NotifyDashboardRecomputed(a)
 	NotifyDashboardRecomputed(a)

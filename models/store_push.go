@@ -31,6 +31,26 @@ var (
 	storePushPending = map[string]bool{}
 )
 
+// pushHooksMu guards the replaceable senders and StorePushDelay: tests swap
+// them (setPushHooks) while timers started by other tests' writes still read
+// them.
+var pushHooksMu sync.RWMutex
+
+// setPushHooks runs change, which replaces senders or StorePushDelay, under
+// pushHooksMu.
+func setPushHooks(change func()) {
+	pushHooksMu.Lock()
+	defer pushHooksMu.Unlock()
+	change()
+}
+
+// hook reads one sender (or the delay) under pushHooksMu.
+func hook[T any](v *T) T {
+	pushHooksMu.RLock()
+	defer pushHooksMu.RUnlock()
+	return *v
+}
+
 // coalesce runs send once, StorePushDelay after the first call for this
 // key; calls made while it is pending join it. A call made after
 // the pending send has started schedules a new one, so the last change is
@@ -44,7 +64,7 @@ func coalesce(key string, send func()) {
 	storePushPending[key] = true
 	storePushMu.Unlock()
 
-	time.AfterFunc(StorePushDelay, func() {
+	time.AfterFunc(hook(&StorePushDelay), func() {
 		storePushMu.Lock()
 		delete(storePushPending, key)
 		storePushMu.Unlock()
@@ -60,7 +80,7 @@ func NotifyStoreUpdated(storeID primitive.ObjectID) {
 	if storeID.IsZero() {
 		return
 	}
-	coalesce(StoreUpdatedEvent+"|"+storeID.Hex(), func() { sendStoreUpdated(storeID) })
+	coalesce(StoreUpdatedEvent+"|"+storeID.Hex(), func() { hook(&sendStoreUpdated)(storeID) })
 }
 
 // NotifyStoresUpdated is NotifyStoreUpdated for several stores.
@@ -87,7 +107,7 @@ func NotifyProcurementMessagesChanged(storeID primitive.ObjectID, msgType string
 	if storeID.IsZero() {
 		return
 	}
-	coalesce(ProcurementMessagesChangedEvent+"|"+storeID.Hex()+"|"+msgType, func() { sendProcurementMessagesChanged(storeID, msgType) })
+	coalesce(ProcurementMessagesChangedEvent+"|"+storeID.Hex()+"|"+msgType, func() { hook(&sendProcurementMessagesChanged)(storeID, msgType) })
 }
 
 // JobProgressEvent carries a background job's progress (store backup and
@@ -113,7 +133,7 @@ func PushJobProgress(ownerUserID, kind, jobID string, snapshot func() interface{
 		return
 	}
 	coalesce(JobProgressEvent+"|"+jobID, func() {
-		sendJobProgress(ownerUserID, map[string]interface{}{"job_id": jobID, "kind": kind, "progress": snapshot()})
+		hook(&sendJobProgress)(ownerUserID, map[string]interface{}{"job_id": jobID, "kind": kind, "progress": snapshot()})
 	})
 }
 
@@ -171,7 +191,7 @@ func NotifyFrontendDeployed() bool {
 	}
 	lastFrontendDeployed = time.Now()
 	storePushMu.Unlock()
-	go sendFrontendDeployed()
+	go hook(&sendFrontendDeployed)()
 	return true
 }
 
@@ -190,5 +210,5 @@ func NotifyDashboardRecomputed(storeID primitive.ObjectID) {
 	if storeID.IsZero() {
 		return
 	}
-	coalesce(DashboardRecomputedEvent+"|"+storeID.Hex(), func() { sendDashboardRecomputed(storeID) })
+	coalesce(DashboardRecomputedEvent+"|"+storeID.Hex(), func() { hook(&sendDashboardRecomputed)(storeID) })
 }
