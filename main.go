@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/go-co-op/gocron"
@@ -121,12 +120,8 @@ func main() {
 	go models.EnsureAllStoreIndexesAllStores()
 	go models.DeduplicateRFQSuppliersAllStores()
 
+	// Plain HTTP only: nginx terminates TLS (and HTTP/2) in front of the API.
 	httpPort := env.Getenv("API_PORT", "2000")
-	httpsPort, err := strconv.Atoi(httpPort)
-	if err != nil {
-		return
-	}
-	httpsPort = httpsPort + 1
 
 	router := mux.NewRouter()
 
@@ -969,9 +964,6 @@ func main() {
 	}
 
 	server := socketio.NewServer(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	server.OnConnect("/", func(s socketio.Conn) error {
 		fmt.Println("New connection:", s.ID())
@@ -1049,10 +1041,6 @@ func main() {
 			}
 		}()
 	}
-
-	go func() {
-		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", corsHandler))
-	}()
 
 	// Initialize the Socket.io server
 
